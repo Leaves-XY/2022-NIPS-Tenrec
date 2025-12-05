@@ -1,0 +1,21 @@
+# ==== Core Framework ====
+torch==1.9.0
+torchvision==0.10.0
+torchaudio==0.9.0
+
+# ==== Data Processing ====
+pandas==1.3.5
+scikit-learn==1.0.2
+numpy==1.21.6  # 与 sklearn/pandas/torch 兼容最佳
+
+# ==== Utility ====
+tqdm==4.64.1
+
+# ==== TensorBoard (用于日志记录) ====
+tensorboard==2.11.0  # 与 torch 1.9 最兼容，不触发 distutils 冲突
+
+# ==== Fix: 为避免 distutils 兼容Bug建议锁定 setuptools <60 ====
+setuptools==59.8.0
+
+
+tensorflow==2.8.0

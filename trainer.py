@@ -7,9 +7,14 @@ import torch.nn.utils.prune as prune
 import torch.nn.functional as F
 from sklearn.metrics import roc_auc_score
 from metrics import *
+from utils import log_print
+
 
 def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
     device = args.device
+    #如果没有cuda
+    if not torch.cuda.is_available():
+        device = 'cpu'
     epoch = args.epochs
     early_stop = 5
     path = os.path.join(args.save_path, '{}_{}_seed{}_best_model_{}.pth'.format(args.task_name, args.model_name, args.seed, args.mtl_task_num))
@@ -44,8 +49,8 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
                 count += 1
             click_auc = roc_auc_score(y_train_click_true, y_train_click_predict)
             like_auc = roc_auc_score(y_train_like_true, y_train_like_predict)
-            print("Epoch %d train loss is %.3f, click auc is %.3f and like auc is %.3f" % (i + 1, total_loss / count,
-                                                                                             click_auc, like_auc))
+            log_print("Epoch %d train loss is %.3f, click auc is %.3f and like auc is %.3f" % (i + 1, total_loss / count,
+                                                                                             click_auc, like_auc), args)
             # 验证
             total_eval_loss = 0
             model.eval()
@@ -68,9 +73,9 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
                 count_eval += 1
             click_auc = roc_auc_score(y_val_click_true, y_val_click_predict)
             like_auc = roc_auc_score(y_val_like_true, y_val_like_predict)
-            print("Epoch %d val loss is %.3f, click auc is %.3f and like auc is %.3f" % (i + 1,
+            log_print("Epoch %d val loss is %.3f, click auc is %.3f and like auc is %.3f" % (i + 1,
                                                                                         total_eval_loss / count_eval,
-                                                                                        click_auc, like_auc))
+                                                                                        click_auc, like_auc), args)
 
             # earl stopping
             if i == 0:
@@ -84,7 +89,7 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
                     if patience < early_stop:
                         patience += 1
                     else:
-                        print("val loss is not decrease in %d epoch and break training" % patience)
+                        log_print("val loss is not decrease in %d epoch and break training" % patience, args)
                         break
         #test
         state = torch.load(path)
@@ -110,9 +115,9 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
             count_eval += 1
         click_auc = roc_auc_score(y_test_click_true, y_test_click_predict)
         like_auc = roc_auc_score(y_test_like_true, y_test_like_predict)
-        print("Epoch %d test loss is %.3f, click auc is %.3f and like auc is %.3f" % (i + 1,
+        log_print("Epoch %d test loss is %.3f, click auc is %.3f and like auc is %.3f" % (i + 1,
                                                                                      total_test_loss / count_eval,
-                                                                                     click_auc, like_auc))
+                                                                                     click_auc, like_auc), args)
 
     else:
         if train:
@@ -134,7 +139,7 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
                     total_loss += float(loss)
                     count += 1
                 auc = roc_auc_score(y_train_label_true, y_train_label_predict)
-                print("Epoch %d train loss is %.3f, auc is %.3f" % (i + 1, total_loss / count, auc))
+                log_print("Epoch %d train loss is %.3f, auc is %.3f" % (i + 1, total_loss / count, auc), args)
                 # 验证
                 total_eval_loss = 0
                 model.eval()
@@ -151,8 +156,8 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
                     total_eval_loss += float(loss)
                     count_eval += 1
                 auc = roc_auc_score(y_val_label_true, y_val_label_predict)
-                print("Epoch %d val loss is %.3f, auc is %.3f " % (i + 1, total_eval_loss / count_eval,
-                                                                                             auc))
+                log_print("Epoch %d val loss is %.3f, auc is %.3f " % (i + 1, total_eval_loss / count_eval,
+                                                                                             auc), args)
                 # earl stopping
                 if i == 0:
                     eval_loss = total_eval_loss / count_eval
@@ -165,7 +170,7 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
                         if patience < early_stop:
                             patience += 1
                         else:
-                            print("val loss is not decrease in %d epoch and break training" % patience)
+                            log_print("val loss is not decrease in %d epoch and break training" % patience, args)
                             break
 
         total_test_loss = 0
@@ -183,8 +188,8 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
             total_test_loss += float(loss)
             count_eval += 1
         auc = roc_auc_score(y_test_label_true, y_test_label_predict)
-        print("Epoch %d test loss is %.3f, auc is %.3f" % (i + 1, total_test_loss / count_eval,
-                                                                                      auc))
+        log_print("Epoch %d test loss is %.3f, auc is %.3f" % (i + 1, total_test_loss / count_eval,
+                                                                                      auc), args)
 
 def Infacc_Train(epochs, b_model, p_model, train_loader, val_loader, writer, args): #, user_noclicks
     b_optimizer = torch.optim.Adam(b_model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -208,7 +213,7 @@ def Infacc_Train(epochs, b_model, p_model, train_loader, val_loader, writer, arg
                                                       args.task_name, args.model_name, args.seed, args.lr, args.block_num)))
 
 def Infacc_Trainer(epoch, b_model, p_model, dataloader, b_optimizer, p_optimizer, writer, args):
-    print("+" * 20, "Train Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Train Epoch {} ".format(epoch + 1) + "+" * 20, args)
     b_model.train()
     p_model.train()
     running_loss = 0
@@ -229,10 +234,10 @@ def Infacc_Trainer(epoch, b_model, p_model, dataloader, b_optimizer, p_optimizer
         b_optimizer.step()
         running_loss += loss.detach().cpu().item()
     writer.add_scalar('Train/loss', running_loss / len(dataloader), epoch)
-    print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)))
+    log_print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)), args)
 
 def Infacc_pn_Trainer(epoch, b_model, p_model, dataloader, b_optimizer, p_optimizer, writer, args):
-    print("+" * 20, "Train Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Train Epoch {} ".format(epoch + 1) + "+" * 20, args)
     b_model.train()
     p_model.train()
     running_loss = 0
@@ -256,10 +261,10 @@ def Infacc_pn_Trainer(epoch, b_model, p_model, dataloader, b_optimizer, p_optimi
         b_optimizer.step()
         running_loss += loss.detach().cpu().item()
     writer.add_scalar('Train/loss', running_loss / len(dataloader), epoch)
-    print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)))
+    log_print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)), args)
 
 def Infacc_Validate(epoch, b_model, p_model, dataloader, writer, args, test=False):
-    print("+" * 20, "Valid Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Valid Epoch {} ".format(epoch + 1) + "+" * 20, args)
     p_model.eval()
     b_model.eval()
     avg_metrics = {}
@@ -284,13 +289,13 @@ def Infacc_Validate(epoch, b_model, p_model, dataloader, writer, args, test=Fals
                     avg_metrics[key] += value
         for key, value in avg_metrics.items():
             avg_metrics[key] = value / i
-        print(avg_metrics)
+        log_print(avg_metrics, args)
         for k in sorted(args.metric_ks, reverse=True):
             writer.add_scalar('Train/NDCG@{}'.format(k), avg_metrics['NDCG@%d' % k], epoch)
         return avg_metrics
 
 def Infacc_pn_Validate(epoch, b_model, p_model, dataloader, writer, args):
-    print("+" * 20, "Valid Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Valid Epoch {} ".format(epoch + 1) + "+" * 20, args)
     p_model.eval()
     b_model.eval()
     avg_metrics = {}
@@ -312,7 +317,7 @@ def Infacc_pn_Validate(epoch, b_model, p_model, dataloader, writer, args):
                     avg_metrics[key] += value
     for key, value in avg_metrics.items():
         avg_metrics[key] = value / i
-    print(avg_metrics)
+    log_print(avg_metrics, args)
     for k in sorted(args.metric_ks, reverse=True):
         writer.add_scalar('Train/NDCG@{}'.format(k), avg_metrics['NDCG@%d' % k], epoch)
     return avg_metrics
@@ -336,7 +341,7 @@ def ProfileTrain(epochs, model, train_loader, val_loader, args):
                                                                                      args.model_name, args.seed, args.user_profile, args.is_pretrain)))
 
 def ProfileTrainer(epoch, model, dataloader, optimizer, args):
-    print("+" * 20, "Train Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Train Epoch {} ".format(epoch + 1) + "+" * 20, args)
     model.train()
     running_loss = 0
     running_acc = 0
@@ -354,10 +359,10 @@ def ProfileTrainer(epoch, model, dataloader, optimizer, args):
         acc = accuracy(logits, labels)
         running_loss += loss.detach().cpu().item()
         running_acc += acc
-    print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)))
+    log_print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)), args)
 
 def ProfileValidate(epoch, model, dataloader, args):
-    print("+" * 20, "Valid Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Valid Epoch {} ".format(epoch + 1) + "+" * 20, args)
     model.eval()
     loss_fn = nn.CrossEntropyLoss()
     running_loss = 0
@@ -374,8 +379,8 @@ def ProfileValidate(epoch, model, dataloader, args):
             acc = accuracy(logits, labels)
             running_loss += loss
             running_acc += acc
-    print("Validation CE Loss: {:.5f}".format(running_loss / len(dataloader)))
-    print("Validation accuracy: {:.5f}".format(running_acc / len(dataloader)))
+    log_print("Validation CE Loss: {:.5f}".format(running_loss / len(dataloader)), args)
+    log_print("Validation accuracy: {:.5f}".format(running_acc / len(dataloader)), args)
     avg_acc = running_acc / len(dataloader)
     return avg_acc
 
@@ -402,12 +407,12 @@ def SeqTrain(epochs, model, train_loader, val_loader, writer, args):
         since = time.time()
         optimizer = SequenceTrainer(epoch, model, train_loader, optimizer, writer, args)
         tmp = time.time() - since
-        print('one epoch train:', tmp)
+        log_print('one epoch train: {}'.format(tmp), args)
         all_time += tmp
         val_since = time.time()
         metrics = Sequence_full_Validate(epoch, model, val_loader, writer, args)
         val_tmp = time.time() - val_since
-        print('one epoch val:', val_tmp)
+        log_print('one epoch val: {}'.format(val_tmp), args)
         val_all_time += val_tmp
         if args.is_pretrain == 0 and 'acc' in args.task_name:
             if metrics['NDCG@20'] >= 0.0193:
@@ -430,16 +435,16 @@ def SeqTrain(epochs, model, train_loader, val_loader, writer, args):
         else:
             i += 1
             if i == 10:
-                print('early stop!')
+                log_print('early stop!', args)
                 break
-    print('train_time:', all_time)
-    print('val_time:', val_all_time)
+    log_print('train_time: {}'.format(all_time), args)
+    log_print('val_time: {}'.format(val_all_time), args)
     return best_model
 
 
 
 def SequenceTrainer(epoch, model, dataloader, optimizer, writer, args): #schedular,
-    print("+" * 20, "Train Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Train Epoch {} ".format(epoch + 1) + "+" * 20, args)
     model.train()
     running_loss = 0
     loss_fn = nn.CrossEntropyLoss(ignore_index=0)
@@ -460,11 +465,11 @@ def SequenceTrainer(epoch, model, dataloader, optimizer, writer, args): #schedul
         optimizer.step()
         running_loss += loss.detach().cpu().item()
     writer.add_scalar('Train/loss', running_loss / len(dataloader), epoch)
-    print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)))
+    log_print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)), args)
     return optimizer
 
 def Sequence_pn_Trainer(epoch, model, dataloader, optimizer, writer, args):  # schedular,
-    print("+" * 20, "Train Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Train Epoch {} ".format(epoch + 1) + "+" * 20, args)
     model.train()
     running_loss = 0
     loss_fn = nn.BCEWithLogitsLoss()
@@ -482,11 +487,11 @@ def Sequence_pn_Trainer(epoch, model, dataloader, optimizer, writer, args):  # s
         optimizer.step()
         running_loss += loss.detach().cpu().item()
     writer.add_scalar('Train/loss', running_loss / len(dataloader), epoch)
-    print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)))
+    log_print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)), args)
     return optimizer
 
 def Sequence_full_Validate(epoch, model, dataloader, writer, args, test=False):
-    print("+" * 20, "Valid Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Valid Epoch {} ".format(epoch + 1) + "+" * 20, args)
     model.eval()
     avg_metrics = {}
     i = 0
@@ -512,13 +517,13 @@ def Sequence_full_Validate(epoch, model, dataloader, writer, args, test=False):
                     avg_metrics[key] += value
     for key, value in avg_metrics.items():
         avg_metrics[key] = value / i
-    print(avg_metrics)
+    log_print(avg_metrics, args)
     for k in sorted(args.metric_ks, reverse=True):
         writer.add_scalar('Train/NDCG@{}'.format(k), avg_metrics['NDCG@%d' % k], epoch)
     return avg_metrics
 
 def Sequence_neg_Validate(epoch, model, optimizer, dataloader, writer, args):
-    print("+" * 20, "Valid Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Valid Epoch {} ".format(epoch + 1) + "+" * 20, args)
     model.eval()
     avg_metrics = {}
     i = 0
@@ -537,7 +542,7 @@ def Sequence_neg_Validate(epoch, model, optimizer, dataloader, writer, args):
                     avg_metrics[key] += value
     for key, value in avg_metrics.items():
         avg_metrics[key] = value / i
-    print(avg_metrics)
+    log_print(avg_metrics, args)
     for k in sorted(args.metric_ks, reverse=True):
         writer.add_scalar('Train/NDCG@{}'.format(k), avg_metrics['NDCG@%d' % k], epoch)
     return avg_metrics
@@ -565,7 +570,7 @@ def KDTrain(epochs, teacher_model, student_model, train_loader, val_loader, writ
                                                     args.embedding_size)))
 
 def KDTrainer(epoch, teacher_model, student_model, dataloader, optimizer, writer, args): #schedular,
-    print("+" * 20, "Train Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Train Epoch {} ".format(epoch + 1) + "+" * 20, args)
     student_model.train()
     teacher_model.eval()
     running_loss = 0
@@ -593,7 +598,7 @@ def KDTrainer(epoch, teacher_model, student_model, dataloader, optimizer, writer
         optimizer.step()
         running_loss += loss.detach().cpu().item()
     writer.add_scalar('Train/loss', running_loss / len(dataloader), epoch)
-    print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)))
+    log_print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)), args)
     return optimizer
 
 def recalls_and_ndcgs_for_ks(scores, labels, ks, args):
@@ -625,7 +630,7 @@ def _create_state_dict(model, optimizer, args):
     }
 
 def lifelong_Train(epochs, model, train_loader, val_loader, writer, task_times, args): #, user_noclicks
-    print("++++++++train_with_prune_task{}++++++++".format(args.task))
+    log_print("++++++++train_with_prune_task{}++++++++".format(args.task), args)
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), betas=(0.9, 0.98), lr=args.lr,
                                  weight_decay=args.weight_decay)
     model = model.to(args.device)
@@ -704,7 +709,7 @@ def lifelong_Train(epochs, model, train_loader, val_loader, writer, task_times, 
 
 
 def lifelong_ReTrain(epochs, model, train_loader, val_loader, test_loader, writer, task_times, args): #, user_noclicks
-    print("++++++++retrain_task{}++++++++".format(task_times))
+    log_print("++++++++retrain_task{}++++++++".format(task_times), args)
     # optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.98), lr=args.lr, weight_decay=args.weight_decay)
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), betas=(0.9, 0.98), lr=args.lr,
                                  weight_decay=args.weight_decay)
@@ -764,7 +769,7 @@ def lifelong_ReTrain(epochs, model, train_loader, val_loader, test_loader, write
     torch.save(state_dict, os.path.join(args.save_path, '{}_{}_seed{}_task_{}_best_model.pth'.format(args.task_name, args.model_name, args.seed, task_times)))
 
 def lifelong_ReTrain1(epochs, model, train_loader, val_loader, test_loader, writer, task_times, args): #, user_noclicks
-    print("++++++++retrain_task{}++++++++".format(task_times))
+    log_print("++++++++retrain_task{}++++++++".format(task_times), args)
     # optimizer = torch.optim.Adam(model.parameters(), betas=(0.9, 0.98), lr=args.lr, weight_decay=args.weight_decay)
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), betas=(0.9, 0.98), lr=args.lr,
                                  weight_decay=args.weight_decay)
@@ -850,7 +855,7 @@ def lifelong_ReTrain1(epochs, model, train_loader, val_loader, test_loader, writ
     #     torch.save(mask_dict, os.path.join(args.save_path, 'task_mask_{}.pth'.format(task_times)))
 
 def lifelongTrainer(epoch, model, mask, dataloader, optimizer, writer, args): #schedular,
-    print("+" * 20, "Train Epoch {}".format(epoch + 1), "+" * 20)
+    log_print("+" * 20 + " Train Epoch {} ".format(epoch + 1) + "+" * 20, args)
     model.train()
     running_loss = 0
     length = 0
@@ -878,7 +883,7 @@ def lifelongTrainer(epoch, model, mask, dataloader, optimizer, writer, args): #s
         running_loss += loss.detach().cpu().item()
     # schedular.step()
     writer.add_scalar('Train/loss', running_loss / len(dataloader), epoch)
-    print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)))
+    log_print("Training CE Loss: {:.5f}".format(running_loss / len(dataloader)), args)
     return optimizer
 
 def model_mask(model, mask, args):
@@ -1051,7 +1056,7 @@ def check_sparsity_dict(model_dict):
         sum_list = sum_list+float(model_dict[key].nelement())
         zero_sum = zero_sum+float(torch.sum(model_dict[key] == 0))
 
-    print('* remain_weight = {:.4f} %'.format(100*(1-zero_sum/sum_list)))
+    print('* remain_weight = {:.4f} %'.format(100*(1-zero_sum/sum_list)))  # check_sparsity_dict 无 args
 
     return 100*(1-zero_sum/sum_list)
 
@@ -1085,7 +1090,7 @@ def check_sparsity(model, args):
                 zero_sum = zero_sum + float(torch.sum(m.weight == 0))
                 zero_sum = zero_sum + float(torch.sum(m.bias == 0))
 
-    print('* remain_weight = {:.4f} %'.format(100*(1-zero_sum/sum_list)))
+    log_print('* remain_weight = {:.4f} %'.format(100*(1-zero_sum/sum_list)), args)
 
     return 100*(1-zero_sum/sum_list)
 

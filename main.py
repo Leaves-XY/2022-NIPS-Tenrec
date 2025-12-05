@@ -7,6 +7,18 @@ from trainer import *
 from neg_sampler import *
 from load_model import *
 from splitter import *
+
+import distutils
+
+# 给 distutils 挂上 version 模块，兼容 torch==1.9.0 里的老写法
+try:
+    import distutils.version as _distutils_version
+except ImportError:
+    # 某些环境下 distutils 会被 setuptools 接管，就从它里面取
+    import setuptools._distutils.version as _distutils_version  # type: ignore
+
+distutils.version = _distutils_version  # 关键：给 distutils 加上 version 属性
+
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.model_selection import train_test_split
 from model.sequence_model.bert4rec import BERTModel
@@ -104,11 +116,11 @@ def get_data(args):
         args.num_items = item_count
         t_splitter = TestSplitter(args)
         train_index, test_index = t_splitter.split(df)
-        print("split train and test")
+        log_print("split train and test", args)
         train_set, test_set = df.iloc[train_index, :].copy(), df.iloc[test_index, :].copy()
         v_splitter = ValidationSplitter(args)
         train_index, val_index = v_splitter.split(train_set)
-        print("split train and val")
+        log_print("split train and val", args)
         train, validation = train_set.iloc[train_index, :].copy(), train_set.iloc[val_index, :].copy()
         val_ur = get_ur(validation)
         train_ur = get_ur(train)
@@ -146,7 +158,7 @@ def get_data(args):
 
     elif name == 'cold_start':
         if args.ch:
-            print("hot & cold")
+            log_print("hot & cold", args)
             cold_data, hot_data, user_count, vocab_size, item_count = colddataset(args.item_min, args)
             size1 = len(cold_data) // 2
             cold_1 = cold_data[:size1]
@@ -369,6 +381,9 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.0005)
 
     parser.add_argument('--device', default='cuda')  # cuda:0
+
+
+
     parser.add_argument('--is_parallel', type=bool, default=False)
     parser.add_argument('--local_rank', type=int)
     parser.add_argument('--num_gpu', type=int, default=1)
@@ -480,7 +495,11 @@ if __name__ == "__main__":
     # if 'bert' in args.model_name:
     set_seed(args.seed)
     writer = SummaryWriter()
-    print(args)
+
+    # 初始化文本日志
+    logger = setup_logger(args.model_name, args.task_name)
+    args.logger = logger
+    logger.log(str(args))
     if args.task_name == 'ctr':
         if args.model_name == 'din' or args.model_name == 'dien':
             train, test, train_model_input, test_model_input, df_columns, hist_list = get_data(args)
@@ -495,10 +514,10 @@ if __name__ == "__main__":
                             validation_split=0.1111)
 
         pred_ans = best_model.predict(test_model_input, args.test_batch_size)
-        print("test LogLoss", round(log_loss(test['click'].values, pred_ans), 4))
-        print("test AUC", round(roc_auc_score(test['click'].values, pred_ans), 4))
+        log_print("test LogLoss {}".format(round(log_loss(test['click'].values, pred_ans), 4)), args)
+        log_print("test AUC {}".format(round(roc_auc_score(test['click'].values, pred_ans), 4)), args)
     elif args.task_name == 'sequence':
-        print('=============sequence=============')
+        log_print('=============sequence=============', args)
         train_loader, val_loader, test_loader = get_data(args)
         model = get_model(args)
         SeqTrain(args.epochs, model, train_loader, val_loader, writer, args)
@@ -524,10 +543,10 @@ if __name__ == "__main__":
             model = MMOE(user_feature_dict, item_feature_dict, emb_dim=args.embedding_size, device=args.device, num_task=num_task)
         mtlTrain(model, train_dataloader, val_dataloader, test_dataloader, args, train=False)
     elif args.task_name == 'transfer_learning':
-        print('=============transfer_learning=============')
+        log_print('=============transfer_learning=============', args)
         train_loader, val_loader, test_loader = get_data(args) #, user_noclick
         if args.is_pretrain == 1:
-            print("pretrain")
+            log_print("pretrain", args)
             model = get_model(args)
             SeqTrain(args.epochs, model, train_loader, val_loader, writer, args) #, user_noclick
             writer.close()
@@ -537,7 +556,7 @@ if __name__ == "__main__":
             SeqTrain(args.epochs, model, train_loader, val_loader, writer, args)
             writer.close()
         else:
-            print("transfer")
+            log_print("transfer", args)
             best_weight = torch.load(args.pretrain_path)
             if 'peter' in args.model_name:
                 args.is_mp = True
@@ -576,7 +595,7 @@ if __name__ == "__main__":
     elif args.task_name == 'model_acc':
         train_loader, val_loader, test_loader = get_data(args)
         if args.is_pretrain == 1:
-            print('++++++++++pretrain++++++++++++')
+            log_print('++++++++++pretrain++++++++++++', args)
             model = get_model(args)
             SeqTrain(args.epochs, model, train_loader, val_loader, writer, args)
             writer.close()
@@ -586,13 +605,13 @@ if __name__ == "__main__":
             SeqTrain(args.epochs, model, train_loader, val_loader, writer, args)
             writer.close()
         else:
-            print('++++++++++transfer++++++++++')
+            log_print('++++++++++transfer++++++++++', args)
             best_weight = torch.load(args.pretrain_path)
             last_model = get_model(args)
             last_model.load_state_dict(best_weight)
             last_block_num = args.block_num
             args.block_num = args.block_num * args.add_num_times
-            print('block_num', args.block_num)
+            log_print('block_num {}'.format(args.block_num), args)
             model = get_model(args)
             model = new_adj_stack(model, last_model, last_block_num, args)
 
@@ -659,13 +678,13 @@ if __name__ == "__main__":
             policynet = policynet.to(args.device)
             backbonenet = backbonenet.to(args.device)
             metrics = Infacc_Validate(0, backbonenet, policynet, test_loader, writer, args, test=True)
-            print('inference_time:', backbonenet.all_time)
+            log_print('inference_time: {}'.format(backbonenet.all_time), args)
         writer.close()
     elif args.task_name == 'user_profile_represent':
-        print('=============user_profile_represent=============')
+        log_print('=============user_profile_represent=============', args)
         train_loader, val_loader, test_loader = get_data(args)
         if args.is_pretrain == 0:
-            print('transfer')
+            log_print('transfer', args)
             best_weight = torch.load(args.pretrain_path)
 
             if 'peter' in args.model_name:
@@ -731,17 +750,17 @@ if __name__ == "__main__":
                 args.prun_rate = 0.3333
                 args.lr = 0.0001
                 args.train_batch_size = 64
-                print(args.lr)
+                log_print('lr: {}'.format(args.lr), args)
             elif i == 2:
                 args.epochs = 10
                 args.re_epochs = 10
                 args.prun_rate = 0.25
                 args.lr = 0.001
-                print(args.lr)
+                log_print('lr: {}'.format(args.lr), args)
             else:
                 args.lr = 0.0005
-                print(args.lr)
-            print("+++++++++task_{}+++++++++".format(i))
+                log_print('lr: {}'.format(args.lr), args)
+            log_print("+++++++++task_{}+++++++++".format(i), args)
             train_loader, val_loader, test_loader = train_loader_list[j], val_loader_list[j], test_loader_list[j]
             j += 1
 
@@ -759,7 +778,7 @@ if __name__ == "__main__":
                             break
                 lifelong_Train(args.epochs, model, train_loader, val_loader, writer, i, args)
                 if i != args.task_num - 1:
-                    print('lr:', args.lr)
+                    log_print('lr: {}'.format(args.lr), args)
                     lifelong_ReTrain(args.re_epochs, model, train_loader, val_loader, test_loader, writer, i, args)
 
         if args.lifelong_eval:
@@ -771,7 +790,7 @@ if __name__ == "__main__":
             best_weight2 = torch.load(model_path2, map_location=torch.device(args.device))
             for test_loader in test_loader_list:
 
-                print("++++++++++task{}_test++++++++++".format(i))
+                log_print("++++++++++task{}_test++++++++++".format(i), args)
                 args.task = i
                 model = get_model(args)
                 model = model.to(args.device)
@@ -807,12 +826,12 @@ if __name__ == "__main__":
                     i += 1
 
     elif args.task_name == 'cold_start':
-        print('=============cold_start=============')
+        log_print('=============cold_start=============', args)
         # args.source_path = '/data/sbr_data_1M.csv'
         # args.target_path = '/data/cold_data.csv'
         train_loader, val_loader, test_loader = get_data(args) #, user_noclick
         if args.is_pretrain == 1:
-            print("pretrain")
+            log_print("pretrain", args)
             model = get_model(args)
             SeqTrain(args.epochs, model, train_loader, val_loader, writer, args) #, user_noclick
             writer.close()
@@ -822,7 +841,7 @@ if __name__ == "__main__":
             SeqTrain(args.epochs, model, train_loader, val_loader, writer, args)
             writer.close()
         else:
-            print("transfer")
+            log_print("transfer", args)
             best_weight = torch.load(args.pretrain_path)
             if 'peter' in args.model_name:
                 args.is_mp = True
@@ -865,13 +884,13 @@ if __name__ == "__main__":
             "map": MAP,
             "precision": Precision,
         }
-        print('=============cf=============')
+        log_print('=============cf=============', args)
         train_loader, val_loader, test_loader = get_data(args) #, user_noclick
         model = get_model(args)
         model.fit(train_loader, val_loader)
         #test
         model = get_model(args)
-        print("model:", args.model_name, "neg_sample_method:", args.sample_method)
+        log_print("model: {} neg_sample_method: {}".format(args.model_name, args.sample_method), args)
         best_weight = torch.load(os.path.join(args.save_path,
                                                     '{}_{}_seed{}_best_model_lr{}_fn{}_block{}_neg{}.pth'.format(
                                                         args.task_name, args.model_name, args.seed, args.lr,
@@ -881,7 +900,7 @@ if __name__ == "__main__":
         preds = model.rank(test_loader)
         ndcg = NDCG(args.test_ur, preds, args.test_u)
         recall = Recall(args.test_ur, preds, args.test_u)
-        print("Test", "NDCG@{}:".format(args.k), ndcg, "Recall@{}:".format(args.k), recall)
+        log_print("Test NDCG@{}: {} Recall@{}: {}".format(args.k, ndcg, args.k, recall), args)
 
 
 

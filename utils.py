@@ -1,3 +1,4 @@
+import os
 import torch
 import json
 import joblib
@@ -13,9 +14,74 @@ from torch.utils.data.distributed import DistributedSampler
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tqdm import tqdm
+from datetime import datetime
 from model.ctr.inputs import *
 
 tqdm.pandas()
+
+
+# ==================== Logger 相关 ====================
+
+class Logger:
+    """同时输出到控制台和文件的日志类"""
+
+    def __init__(self, log_path):
+        self.log_path = log_path
+        self.file = open(log_path, 'a', encoding='utf-8')
+
+    def log(self, message):
+        """打印并写入日志"""
+        print(message)
+        self.file.write(str(message) + '\n')
+        self.file.flush()
+
+    def close(self):
+        """关闭日志文件"""
+        self.file.close()
+
+
+def setup_logger(model_name, task_name=''):
+    """
+    设置日志器
+    Args:
+        model_name: 模型名称
+        task_name: 任务名称（可选）
+    Returns:
+        Logger 实例
+    """
+    # 创建 log 目录
+    log_dir = 'log'
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    # 生成时间戳
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    # 生成日志文件名
+    if task_name:
+        log_filename = f'{task_name}_{model_name}_{timestamp}.txt'
+    else:
+        log_filename = f'{model_name}_{timestamp}.txt'
+
+    log_path = os.path.join(log_dir, log_filename)
+
+    logger = Logger(log_path)
+    logger.log(f'=== Log started at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")} ===')
+    logger.log(f'Model: {model_name}, Task: {task_name}')
+    logger.log('=' * 60)
+
+    return logger
+
+
+def log_print(message, args):
+    """同时打印到控制台和写入日志文件"""
+    if hasattr(args, 'logger') and args.logger is not None:
+        args.logger.log(message)
+    else:
+        print(message)
+
+
+# ==================== 数据处理相关 ====================
 
 def select_sampler(train_data, val_data, test_data, user_count, item_count, args):
     if args.sample == 'random':
