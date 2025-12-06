@@ -99,26 +99,31 @@ def mtl_data(path=None, args=None):
     # df = df[:100000]
     df['video_category'] = df['video_category'].astype(str)
     df = sample_data(df)
+    #设定 --mtl_task_num=2 时，模型是 双任务 MMoE → click + like 共同训练
     if args.mtl_task_num == 2:
         label_columns = ['click', 'like']
         categorical_columns = ["user_id", "item_id", "video_category", "gender", "age", "hist_1", "hist_2",
                        "hist_3", "hist_4", "hist_5", "hist_6", "hist_7", "hist_8", "hist_9", "hist_10"]
+    #设为 1，就退化为单任务 CTR
     elif args.mtl_task_num == 1:
         label_columns = ['click']
         categorical_columns = ["user_id", "item_id", "video_category", "gender", "age", "hist_1", "hist_2",
                                "hist_3", "hist_4", "hist_5", "hist_6", "hist_7", "hist_8", "hist_9", "hist_10"]
+    #设为 0，就退化为单任务 CVR
     else:
         label_columns = ['like']
         categorical_columns = ["user_id", "item_id", "video_category", "gender", "age", "hist_1", "hist_2",
                                "hist_3", "hist_4", "hist_5", "hist_6", "hist_7", "hist_8", "hist_9", "hist_10"]
     user_columns = ["user_id", "gender", "age"]
+    #把类别特征编码转换成从 0 开始的整数 ID
     for col in tqdm(categorical_columns):
         le = LabelEncoder()
         df[col] = le.fit_transform(df[col])
-
+ #把目标拼起来
     new_columns = categorical_columns + label_columns
     df = df.reindex(columns=new_columns)
 
+#构造用户和物品的特征的字典 (feature_name: (feature_unique_num, feature_index) == (embedding vocab size, feature在输入向量第几列))
     user_feature_dict, item_feature_dict = {}, {}
     for idx, col in tqdm(enumerate(df.columns)):
         if col not in label_columns:
@@ -126,7 +131,7 @@ def mtl_data(path=None, args=None):
                 user_feature_dict[col] = (len(df[col].unique()), idx)
             else:
                 item_feature_dict[col] = (len(df[col].unique()), idx)
-
+# 打乱数据集，然后划分训练集、验证集和测试集
     df = df.sample(frac=1)
     train_len = int(len(df) * 0.8)
     train_df = df[:train_len]

@@ -244,6 +244,7 @@ def get_data(args):
     elif name == 'mtl':
         train_data, val_data, test_data, user_feature_dict, item_feature_dict = mtl_data(path, args)
         if args.mtl_task_num == 2:
+            # 切分特征和标签  三元组(features, label1, label2)
             train_dataset = (train_data.iloc[:, :-2].values, train_data.iloc[:, -2].values, train_data.iloc[:, -1].values)
             val_dataset = (val_data.iloc[:, :-2].values, val_data.iloc[:, -2].values, val_data.iloc[:, -1].values)
             test_dataset = (test_data.iloc[:, :-2].values, test_data.iloc[:, -2].values, test_data.iloc[:, -1].values)
@@ -490,7 +491,15 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-#如果没有gpu
+
+
+    # 初始化文本日志
+    logger = setup_logger(args )
+    args.logger = logger
+    logger.log(str(args))
+
+    #如果没有gpu
+    log_print(f"torch.cuda.is_available():{torch.cuda.is_available()}", args)
     if not torch.cuda.is_available():
         args.device = 'cpu'
 
@@ -502,10 +511,6 @@ if __name__ == "__main__":
     set_seed(args.seed)
     writer = SummaryWriter()
 
-    # 初始化文本日志
-    logger = setup_logger(args )
-    args.logger = logger
-    logger.log(str(args))
     if args.task_name == 'ctr':
         if args.model_name == 'din' or args.model_name == 'dien':
             train, test, train_model_input, test_model_input, df_columns, hist_list = get_data(args)
@@ -537,7 +542,6 @@ if __name__ == "__main__":
             # print('inference_time:', model.all_time)
         writer.close()
     elif args.task_name == 'mtl':
-
         train_dataloader, val_dataloader, test_dataloader, user_feature_dict, item_feature_dict = get_data(args)
         if args.mtl_task_num == 2:
             num_task = 2

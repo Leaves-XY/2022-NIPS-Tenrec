@@ -18,7 +18,7 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
     epoch = args.epochs
     early_stop = 5
     path = os.path.join(args.save_path, '{}_{}_seed{}_best_model_{}.pth'.format(args.task_name, args.model_name, args.seed, args.mtl_task_num))
-    loss_function = nn.BCEWithLogitsLoss()
+    loss_function = nn.BCEWithLogitsLoss()  #Sigmoid + BCELoss
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     model.to(device)
     # 多少步内验证集的loss没有变小就提前停止
@@ -32,7 +32,7 @@ def mtlTrain(model, train_loader, val_loader, test_loader, args, train=True):
             y_train_like_true = []
             y_train_like_predict = []
             total_loss, count = 0, 0
-            for idx, (x, y1, y2) in enumerate(train_loader):
+            for idx, (x, y1, y2) in enumerate(train_loader):  #x:特征 | y1:点击标签 | y2:喜欢标签
                 x, y1, y2 = x.to(device), y1.to(device), y2.to(device)
                 predict = model(x)
                 y_train_click_true += list(y1.squeeze().cpu().numpy())

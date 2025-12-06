@@ -23,7 +23,7 @@ class MMOE(nn.Module):
         :param item_feature_dict: item feature dict include: {feature_name: (feature_unique_num, feature_index)}
         :param emb_dim: int embedding dimension
         :param n_expert: int number of experts in mmoe
-        :param mmoe_hidden_dim: mmoe layer input dimension
+        :param mmoe_hidden_dim: mmoe layer input dimension  Expert层输出维度 = 多任务共享特征空间大小
         :param hidden_dim: list task tower hidden dimension
         :param dropouts: list of task dnn drop out probability
         :param output_size: int task output size
@@ -45,7 +45,7 @@ class MMOE(nn.Module):
         if device:
             self.device = device
 
-        # embedding初始化
+        # embedding初始化  根据 CSV 中每个字段的类别数量，动态创建对应的 embedding 层，存入模型属性里，最终用于多特征嵌入表示
         user_cate_feature_nums, item_cate_feature_nums = 0, 0
         for user_cate, num in self.user_feature_dict.items():
             if num[0] > 1:
@@ -56,7 +56,7 @@ class MMOE(nn.Module):
                 item_cate_feature_nums += 1
                 setattr(self, item_cate, nn.Embedding(num[0], emb_dim))
 
-        # user embedding + item embedding
+        # user embedding + item embedding  模型第一层的 hidden_size 计算
         hidden_size = emb_dim * (user_cate_feature_nums + item_cate_feature_nums) + \
                       (len(self.user_feature_dict) - user_cate_feature_nums) + (
                               len(self.item_feature_dict) - item_cate_feature_nums)
@@ -71,9 +71,10 @@ class MMOE(nn.Module):
         for gate in self.gates:
             gate.data.normal_(0, 1)
         self.gates_bias = [torch.nn.Parameter(torch.rand(n_expert), requires_grad=True) for _ in range(num_task)]
-
+       #动态构建每个任务的独立 Tower 网络(DNN)
         for i in range(self.num_task):
             setattr(self, 'task_{}_dnn'.format(i + 1), nn.ModuleList())
+            # 任务塔神经网络的层维度表:hid_dim[0] = MMOE输出 → Tower输入维度    hid_dim[1:] = 后续全连接层的维度（由 hidden_dim 决定）
             hid_dim = [mmoe_hidden_dim] + hidden_dim
             for j in range(len(hid_dim) - 1):
                 getattr(self, 'task_{}_dnn'.format(i + 1)).add_module('ctr_hidden_{}'.format(j),
@@ -87,7 +88,7 @@ class MMOE(nn.Module):
 
     def forward(self, x):
         assert x.size()[1] == len(self.item_feature_dict) + len(self.user_feature_dict)
-        # embedding
+        # embedding  拿到item和user各自特征对应的emb去预测和训练
         user_embed_list, item_embed_list = list(), list()
         for user_feature, num in self.user_feature_dict.items():
             if num[0] > 1:
@@ -100,20 +101,20 @@ class MMOE(nn.Module):
             else:
                 item_embed_list.append(x[:, num[1]].unsqueeze(1))
 
-        # embedding 融合
+        # 所有特征embedding 融合
         user_embed = torch.cat(user_embed_list, axis=1)
         item_embed = torch.cat(item_embed_list, axis=1)
 
         # hidden layer
         hidden = torch.cat([user_embed, item_embed], axis=1).float()  # batch * hidden_size
 
-        # mmoe
+        # mmoe  所有 Expert 一次性算完
         experts_out = torch.einsum('ij, jkl -> ikl', hidden, self.experts)  # batch * mmoe_hidden_size * num_experts
         experts_out += self.experts_bias
         if self.expert_activation is not None:
             experts_out = self.expert_activation(experts_out)
 
-        gates_out = list()
+        gates_out = list()   #为每个任务算“专家权重分布”
         for idx, gate in enumerate(self.gates):
             gate = gate.to(self.device)
             gate_out = torch.einsum('ab, bc -> ac', hidden, gate)  # batch * num_experts
@@ -123,14 +124,14 @@ class MMOE(nn.Module):
             gate_out = nn.Softmax(dim=-1)(gate_out)
             gates_out.append(gate_out)
 
-        outs = list()
+        outs = list()  #Gate 加权专家输出 → 得到每个任务自己的输入表示
         for gate_output in gates_out:
             expanded_gate_output = torch.unsqueeze(gate_output, 1)  # batch * 1 * num_experts
             weighted_expert_output = experts_out * expanded_gate_output.expand_as(
                 experts_out)  # batch * mmoe_hidden_size * num_experts
             outs.append(torch.sum(weighted_expert_output, 2))  # batch * mmoe_hidden_size
 
-        # task tower
+        # task tower  任务 Tower（各任务自己的 DNN）
         task_outputs = list()
         for i in range(self.num_task):
             x = outs[i]
