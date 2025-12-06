@@ -8,10 +8,10 @@ bsub -N -q gpu \
   --task_name=mtl \
   --seed=100 \
   --model_name=mmoe \
-  --dataset_path='data/ctr_data_1M.csv' \
-  --train_batch_size=4096 \
-  --val_batch_size=4096 \
-  --test_batch_size=4096 \
+ --dataset_path='data/ctr_data_user50k_1.csv' \
+  --train_batch_size=512 \
+  --val_batch_size=512 \
+  --test_batch_size=512 \
   --epochs=20 \
   --lr=0.0001 \
   --embedding_size=32 \

@@ -40,7 +40,7 @@ class Logger:
         self.file.close()
 
 
-def setup_logger(model_name, task_name=''):
+def setup_logger(args):
     """
     设置日志器
     Args:
@@ -56,12 +56,14 @@ def setup_logger(model_name, task_name=''):
 
     # 生成时间戳
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-
+    task_name=args.task_name
+    model_name=args.model_name
+    dataset = os.path.splitext(os.path.basename(args.dataset_path))[0]
     # 生成日志文件名
     if task_name:
-        log_filename = f'{task_name}_{model_name}_{timestamp}.txt'
+        log_filename = f'{task_name}_{model_name}_{dataset}_{timestamp}.txt'
     else:
-        log_filename = f'{model_name}_{timestamp}.txt'
+        log_filename = f'{model_name}_{dataset}_{timestamp}.txt'
 
     log_path = os.path.join(log_dir, log_filename)
 

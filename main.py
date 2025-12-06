@@ -59,7 +59,8 @@ from model.cf.ngcf import NGCF
 # from model.cf.vae import VAECF
 # from model.cf.item2vec import Item2Vec
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '6'
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
 
 def select_sampler(train_data, val_data, test_data, user_count, item_count, args):
     if args.sample == 'random':
@@ -488,6 +489,11 @@ if __name__ == "__main__":
     parser.add_argument('--ch', type=bool, default=True)
 
     args = parser.parse_args()
+
+#如果没有gpu
+    if not torch.cuda.is_available():
+        args.device = 'cpu'
+
     if args.is_parallel:
         torch.distributed.init_process_group(backend="nccl")
         torch.cuda.set_device(args.local_rank)
@@ -497,7 +503,7 @@ if __name__ == "__main__":
     writer = SummaryWriter()
 
     # 初始化文本日志
-    logger = setup_logger(args.model_name, args.task_name)
+    logger = setup_logger(args )
     args.logger = logger
     logger.log(str(args))
     if args.task_name == 'ctr':
