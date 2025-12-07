@@ -58,10 +58,20 @@ def setup_logger(args):
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     task_name=args.task_name
     model_name=args.model_name
+    mtl_task_num=args.mtl_task_num
     dataset = os.path.splitext(os.path.basename(args.dataset_path))[0]
     # 生成日志文件名
     if task_name:
-        log_filename = f'{task_name}_{model_name}_{dataset}_{timestamp}.txt'
+        task=""
+        if mtl_task_num==2:
+            task="click_like"
+        elif mtl_task_num==1:
+            task="click"
+        elif mtl_task_num==0:
+            task="like"
+
+        log_filename = f'{task_name}_{task}_{model_name}_{dataset}_{timestamp}.txt'
+
     else:
         log_filename = f'{model_name}_{dataset}_{timestamp}.txt'
 

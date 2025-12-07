@@ -551,7 +551,7 @@ if __name__ == "__main__":
             model = ESMM(user_feature_dict, item_feature_dict, emb_dim=args.embedding_size, num_task=num_task)
         else:
             model = MMOE(user_feature_dict, item_feature_dict, emb_dim=args.embedding_size, device=args.device, num_task=num_task)
-        mtlTrain(model, train_dataloader, val_dataloader, test_dataloader, args, train=False)
+        mtlTrain(model, train_dataloader, val_dataloader, test_dataloader, args, train=True)
     elif args.task_name == 'transfer_learning':
         log_print('=============transfer_learning=============', args)
         train_loader, val_loader, test_loader = get_data(args) #, user_noclick
